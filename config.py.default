@@ -1,0 +1,7 @@
+DEBUG = True
+CSRF_ENABLED = True # 激活跨站点请求伪造保护
+SECRET_KEY = 'cashbook#default.secret_key'
+
+SQLALCHEMY_DATABASE_URI = 'mysql+mysqlconnector://root:password@127.0.0.1/cashbook'
+SQLALCHEMY_TRACK_MODIFICATIONS = False  # 关闭对模型修改的监控
+SQLALCHEMY_ECHO = True  # 显示生成的SQL语句
