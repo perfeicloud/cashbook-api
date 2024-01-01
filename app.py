@@ -1,7 +1,7 @@
 #!.venv/bin/python
 from flask import Flask
 from utils import ReverseProxied, r
-from models import db
+from models import db, User, Application, Book, Account, Category, Tag, Tally, UserBook, UserConfigure, BookConfigure
 import config
 
 
@@ -24,15 +24,20 @@ def error_handler(e):
     return r(500, str(e))
 
 
+from flask import session
 @app.route('/')
 def index():
-    return r(msg='Welcome!')
+    return r(msg='Welcome!', data={'token': session.get('token')})
 
+@app.route('/login')
+def login():
+    session['token'] = {'user_id': 1000}
+    return r(msg='Login Successful!')
 
 # flask initdb --drop
-from models import User, Application, Book, Account, Category, Tag, Tally
 import click
 import time
+import random
 @app.cli.command()
 @click.option('--drop', is_flag=True, help='Create after drop.')
 def initdb(drop):
@@ -54,9 +59,9 @@ def initdb(drop):
     })
 
     # add apps
-    apps = [Application()._set({'app_id': i[0], 'app_name': i[1], 'secret_key': i[2]}) for i in (
-        ('wx65c7fff6a12a1e2b','微信小程序','c0506c6421e192a6418fa0bf7e0e65a7'),
-        ('wb9705eb7ac2c98403','Web页','2567a5ec9705eb7ac2c984033e06189d'),
+    apps = [Application()._set({'app_id': i[0], 'app_name': i[1], 'secret_key': i[2], 'expirydate': i[3]}) for i in (
+        ('wx65c7fff6a12a1e2b','微信小程序','c0506c6421e192a6418fa0bf7e0e65a7', '2023-12-31 23:59:59'),
+        ('wb9705eb7ac2c98403','Web页','2567a5ec9705eb7ac2c984033e06189d', '2023-12-31 23:59:59'),
     )]
 
     # add accounts
@@ -74,8 +79,13 @@ def initdb(drop):
     book[0].accounts.append(accounts[0])
     book[0].accounts.append(accounts[1])
     book[0].accounts.append(accounts[2])
+    book[0].configure = BookConfigure(budget=1000)
+    book[1].configure = BookConfigure()
+    user.configure = UserConfigure(current_book_id=book[0].id)
     # book[1].accounts.append(account[0])
     db.session.flush()
+    for i in UserBook.query.filter_by(user_id=user.id).all():
+        i.permission = 7
 
     # add categories
     categories = ((
@@ -109,12 +119,12 @@ def initdb(drop):
 
     # add tallies
     tallies = (
-        (book[0].id, ((150.50,2,1),(800.80,3,2),(2580,7,3),(8500,13,2),(1200,15,3),),),
+        (book[0].id, ((150.50,2,1),(800.80,3,2),(2580,7,3),(8500,13,2),(1200,15,3),(150.50,2,1),(800.80,3,2),(2580,7,3),(8500,13,2),(1200,15,3),(150.50,2,1),(800.80,3,2),(2580,7,3),(8500,13,2),(1200,15,3),),),
         (book[1].id, ((1000,21,None),(60000,22,None),),),
     )
     for i in tallies:
         db.session.add_all([
-            Tally(book_id=i[0],amount=j[0], category_id=j[1], account_id=j[2], record_timestamp=int(time.time())) for j in i[1]
+            Tally(book_id=i[0],amount=j[0], category_id=j[1], account_id=j[2], record_timestamp=int(time.time())-random.randint(1, 60*60*24*30)) for j in i[1]
         ])
 
     db.session.commit()

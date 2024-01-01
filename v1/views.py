@@ -1,5 +1,5 @@
 from flask import Blueprint, request
-from models import Authorize as auth, User, Application, Book, Account, Category, Tag, Tally
+from models import db, Authorize as auth, User, Application, Book, Account, Category, Tag, Tally, UserBook
 from utils import r
 
 v1 = Blueprint('v1', __name__)
@@ -14,14 +14,13 @@ def user_login():
 
 
 # ---------- my API ----------
-@v1.route('/', methods=['GET'])
 @v1.route('/my', methods=['GET'])
 @auth.login_required
 def my_for_id(user_id:int):
     user: User = User.query.filter_by(id=user_id, state=0).first()
     if not user:
         return r(403, '用户被限制')
-    return r(data=user._get(('nick_name', 'avatar_url', 'motto', 'vip_level', 'mobile', 'mail', 'wx_openid', 'accounts', 'books')))
+    return r(data=user._get())
 
 
 # ---------- userinfo API ----------
@@ -76,7 +75,12 @@ def book_for_id(user_id:int, id:int):
 @auth.login_required
 def book(user_id:int):
     req = dict(request.json)
-    #
+    book = Book()._set(req)
+    user: User = User.query.get(user_id)
+    user.books.append(book)
+    UserBook.query.get((user.id, book.id)).permission = 7
+    db.session.commit()
+
     return r(201)
 
 
@@ -170,7 +174,8 @@ def tally(user_id:int):
 @v1.route('/tallies', methods=['GET'])
 @auth.login_required
 def tallies(user_id:int):
-    tallies: list[Tally] = Tally.query.all()
+    args = dict(request.args)
+    tallies: list[Tally] = db.session.query(Tally).filter(Tally.book_id==args.get('book-id'), Tally.record_timestamp.between(args.get('start'), args.get('end'))).all()
     return r(data=[i._get() for i in tallies])
 
 

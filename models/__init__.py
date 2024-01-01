@@ -24,8 +24,6 @@ str_remark = Annotated[str, mapped_column(String(255), nullable=True, doc='备�
 class Base(db.Model):
     __abstract__ = True
     __cloumns__ = tuple()
-    created: Mapped[datetime] = mapped_column(default=datetime.now)
-    state: Mapped[int] = mapped_column(default=int(0))
 
     def _get(self, keys:list|tuple = None):
         def __to_camel(s:str):
@@ -64,7 +62,7 @@ class Base(db.Model):
 
 class User(Base):
     __tablename__ = 'user'
-    __cloumns__ = ('nick_name', 'avatar_url', 'motto', 'vip_level', 'mobile', 'mail', 'wx_openid', 'accounts', 'books')
+    __cloumns__ = ('nick_name', 'avatar_url', 'motto', 'vip_level', 'mobile', 'mail', 'wx_openid', 'accounts', 'books', 'configure')
     id: Mapped[intpk]
     mobile: Mapped[str] = mapped_column(String(11), unique=True, nullable=True, index=True, doc='手机号')
     mail: Mapped[str] = mapped_column(String(64), unique=True, nullable=True, index=True, doc='邮箱')
@@ -74,65 +72,89 @@ class User(Base):
     avatar_url: Mapped[str] = mapped_column(Text, nullable=True, doc='头像url')
     motto: Mapped[str_remark] = mapped_column(doc='格言')
     vip_level: Mapped[int] = mapped_column(SmallInteger, default=int(1), doc='会员等级')
+    created: Mapped[datetime] = mapped_column(default=datetime.now)
+    state: Mapped[int] = mapped_column(default=int(0))
+    configure: Mapped['UserConfigure'] = relationship('UserConfigure', back_populates='user', uselist=False, cascade='all, delete')
     accounts: Mapped[List['Account']] = relationship(cascade="all, delete") # 1->n 单方向一对多，一方引用多方
     books: Mapped[List['Book']] = relationship(secondary='user_book', cascade="all, delete", back_populates='users') # n->n 多对多，双向引用
 
+class UserConfigure(Base):
+    __tablename__ = 'user_configure'
+    __cloumns__ = ('current_book_id',)
+    user_id: Mapped[int] = mapped_column(ForeignKey('user.id', ondelete='CASCADE'), primary_key=True) # 1->1
+    user = relationship('User', back_populates='configure')
+    current_book_id: Mapped[int] = mapped_column(SmallInteger, default=int(0), doc='当前账本')
+
 class Application(Base):
     __tablename__ = 'application'
-    __cloumns__ = ('id', 'app_id', 'app_name', 'secret_key', 'created')
+    __cloumns__ = ('id', 'app_id', 'app_name', 'secret_key', 'expirydate')
     id: Mapped[intpk]
     app_id: Mapped[str] = mapped_column(String(32), unique=True, index=True, doc='AppID')
     app_name: Mapped[str_name]
     secret_key: Mapped[str] = mapped_column(String(64), doc='密钥')
+    expirydate: Mapped[datetime]
 
 class Book(Base):
     __tablename__ = 'book'
-    __cloumns__ = ('id', 'name', 'remark', 'accounts', 'categories', 'tags', 'created')
+    __cloumns__ = ('id', 'name', 'icon', 'remark', 'configure', 'accounts', 'categories', 'tags', 'created')
     id: Mapped[intpk]
     name: Mapped[str_name]
+    icon: Mapped[str_remark] = mapped_column(doc='图标url')
     remark: Mapped[str_remark]
+    created: Mapped[datetime] = mapped_column(default=datetime.now)
+    state: Mapped[int] = mapped_column(default=int(0))
+    configure: Mapped['BookConfigure'] = relationship('BookConfigure', back_populates='book', uselist=False, cascade='all, delete')
     users: Mapped[List['User']] = relationship(secondary='user_book', back_populates='books') # n->n 多对多，双向引用
     accounts: Mapped[List['Account']] = relationship(secondary='book_account') # n->n 多对多，单向引用
     categories: Mapped[List['Category']] = relationship(secondary='book_category', cascade="all, delete") # n->n 多对多，单向引用
     tags: Mapped[List['Tag']] = relationship(secondary='book_tag', cascade="all, delete") # n->n 多对多，单向引用
     tallies: Mapped[List['Tally']] = relationship(lazy='dynamic', cascade="all, delete")
 
+class BookConfigure(Base):
+    __tablename__ = 'book_configure'
+    __cloumns__ = ('budget', 'period')
+    book_id: Mapped[int] = mapped_column(ForeignKey('book.id', ondelete='CASCADE'), primary_key=True) # 1->1
+    book = relationship('Book', back_populates='configure')
+    budget: Mapped[DECIMAL] = mapped_column(DECIMAL(13, 4), default=0, doc='预算金额')
+    period: Mapped[str] = mapped_column(String(32), default='month', doc='AppID')
+
 class Account(Base):
     __tablename__ = 'account'
-    __cloumns__ = ('id', 'name', 'remark')
+    __cloumns__ = ('id', 'name', 'icon', 'remark')
     id: Mapped[intpk]
     name: Mapped[str_name]
+    icon: Mapped[str_remark] = mapped_column(doc='图标url')
     remark: Mapped[str_remark]
     user_id: Mapped[int] = mapped_column(ForeignKey('user.id', ondelete='CASCADE')) # n->1
 
 class Category(Base):
     __tablename__ = 'category'
-    __cloumns__ = ('id', 'pid', 'name', 'type', 'icon_url', 'remark', 'seq', 'childen')
+    __cloumns__ = ('id', 'pid', 'name', 'type', 'icon', 'remark', 'seq', 'children')
     id: Mapped[intpk]
     name: Mapped[str_name]
     type: Mapped[1|0|-1] = mapped_column(SmallInteger, default=int(0), doc='类型')
-    icon_url: Mapped[str_remark] = mapped_column(doc='图标url')
+    icon: Mapped[str_remark] = mapped_column(doc='图标url')
     remark: Mapped[str_remark]
     seq: Mapped[int] = mapped_column(SmallInteger, default=int(0), doc='序号')
     pid: Mapped[Optional[int]] = mapped_column(ForeignKey('category.id', ondelete='CASCADE'), doc='父ID') # n->1
-    childen: Mapped[List['Category']] = relationship(cascade="all, delete") # 1->n 单方向一对多，一方引用多方
+    children: Mapped[List['Category']] = relationship(cascade="all, delete") # 1->n 单方向一对多，一方引用多方
 
 class Tag(Base):
     __tablename__ = 'tag'
-    __cloumns__ = ('id', 'pid', 'name', 'remark', 'seq', 'childen')
+    __cloumns__ = ('id', 'pid', 'name', 'remark', 'seq', 'children')
     id: Mapped[intpk]
     name: Mapped[str_name]
     remark: Mapped[str_remark]
     seq: Mapped[int] = mapped_column(SmallInteger, default=int(0), doc='序号')
     pid: Mapped[Optional[int]] = mapped_column(ForeignKey('tag.id', ondelete='CASCADE'), doc='父ID') # n->1
-    childen: Mapped[List['Tag']] = relationship(cascade="all, delete") # 1->n 单方向一对多，一方引用多方
+    children: Mapped[List['Tag']] = relationship(cascade="all, delete") # 1->n 单方向一对多，一方引用多方
 
 class Tally(Base):
     __tablename__ = 'tally'
-    __cloumns__ = ('id', 'amount', 'record_timestamp', 'remark', 'category', 'account', 'tags')
+    __cloumns__ = ('id', 'amount', 'record_timestamp', 'remark', 'category_id', 'account_id', 'tags')
     id: Mapped[intpk]
     amount: Mapped[DECIMAL] = mapped_column(DECIMAL(13, 4), default=0, doc='金额')
-    record_timestamp: Mapped[int]
+    record_timestamp: Mapped[int] = mapped_column(index=True)
     remark: Mapped[str_remark]
     book_id: Mapped[int] = mapped_column(ForeignKey('book.id', ondelete='CASCADE')) # n->1
     category_id: Mapped[int] = mapped_column(ForeignKey('category.id')) # n->1
@@ -145,6 +167,7 @@ class UserBook(db.Model):
     __tablename__ = 'user_book'
     user_id: Mapped[int] = mapped_column(ForeignKey('user.id', ondelete='CASCADE'), primary_key=True) # n->n
     book_id: Mapped[int] = mapped_column(ForeignKey('book.id', ondelete='CASCADE'), primary_key=True) # n->n
+    permission: Mapped[int] = mapped_column(default=int(4), doc='权限r=4,(w=2,d=1,)rw=6,rwd=7')
 
 class BookAccount(db.Model):
     __tablename__ = 'book_account'
@@ -213,7 +236,7 @@ class Authorize:
             return None
         payload = {
             'aud': self.user.id,
-            'exp': int(time.time()) + 300 * 12 * 24
+            'exp': int(datetime.timestamp(self.app.expirydate))
         }
         return jwt.encode(
             {'typ': 'JWT', 'alg': 'HS256'},
@@ -266,26 +289,20 @@ class Authorize:
             raise Unauthorized(errmsg.get(req['errcode'], '微信验证失败'))
         return req.get('openid')
 
-
     @staticmethod
     def login_required(view_func):
         @wraps(view_func)
         def verify_token(*args, **kwargs):
-            app_id=request.headers.get('appid')
-            if not app_id:
+            print(view_func.__name__, request.method)
+            app: Application = Application.query.filter_by(app_id=request.headers.get('appid')).first()
+            if not app:
                 raise Unauthorized('非法客户端')
-            secret_key = Application.query.filter_by(app_id=app_id).one().secret_key
             try:
-                token = request.headers.get('Authorization').split(None, 1)[1]
+                data = jwt.decode(request.headers['Authorization'].split(None, 1)[1], app.secret_key)
             except Exception:
                 raise Unauthorized('登录凭证无效')
-            try:
-                data = jwt.decode(token, secret_key)
-                exp = data.get('exp')
-                if exp and time.time() > data['exp']: 
-                    raise Unauthorized('登录凭证已过期')
-            except JoseError:
-                raise Unauthorized('登录凭证无效')
+            if time.time() > data.get('exp', 0): 
+                raise Unauthorized('凭证已到期')
             return view_func(*args, user_id=data.get('aud'), **kwargs)
         return verify_token
 
